@@ -2,8 +2,8 @@ package com.snapcloud.api.service;
 
 import com.snapcloud.api.domain.User;
 import com.snapcloud.api.repository.UserRepository;
-import com.snapcloud.api.exception.UnauthorizedException;
-import com.snapcloud.api.exception.ForbiddenException;
+import com.snapcloud.api.exception.custom.UnauthorizedException;
+import com.snapcloud.api.exception.custom.ForbiddenException;
 import java.util.Collections;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;

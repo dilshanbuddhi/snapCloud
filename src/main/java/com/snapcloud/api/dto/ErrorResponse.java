@@ -1,4 +1,4 @@
-package com.snapcloud.api.exception;
+package com.snapcloud.api.dto;
 
 import java.time.LocalDateTime;
 

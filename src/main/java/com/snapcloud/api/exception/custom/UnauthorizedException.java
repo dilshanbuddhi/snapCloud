@@ -1,4 +1,4 @@
-package com.snapcloud.api.exception;
+package com.snapcloud.api.exception.custom;
 
 public class UnauthorizedException extends RuntimeException {
     public UnauthorizedException() {

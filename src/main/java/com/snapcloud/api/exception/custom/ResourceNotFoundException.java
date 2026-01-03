@@ -1,4 +1,4 @@
-package com.snapcloud.api.exception;
+package com.snapcloud.api.exception.custom;
 
 public class ResourceNotFoundException extends RuntimeException {
     public ResourceNotFoundException() { super(); }
