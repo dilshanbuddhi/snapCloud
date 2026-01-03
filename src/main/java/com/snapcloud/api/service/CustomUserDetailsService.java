@@ -21,7 +21,7 @@ public class CustomUserDetailsService implements UserDetailsService {
     User user = userRepository.findByEmail(username)
         .orElseThrow(() -> new UnauthorizedException("Invalid email or password"));
 
-    if (!Boolean.TRUE.equals(user.isEmailVerified())) {
+    if (!user.isEmailVerified()) {
         throw new ForbiddenException("Email not verified");
     }
 
