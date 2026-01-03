@@ -18,6 +18,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.Instant;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Service
@@ -50,8 +51,7 @@ public class AuthServiceImpl implements AuthService {
         userRepository.save(user);
 
         String otp = OtpUtils.generateOtp();
-        otpStore.put(user.getEmail(), otp);
-        otpExpiry.put(user.getEmail(), Instant.now().plusSeconds(OTP_EXP));
+        storeOtp(user.getEmail(), otp);
 
         sendMailUtil.sendEmail(
                 user.getEmail(),
@@ -68,8 +68,7 @@ public class AuthServiceImpl implements AuthService {
     @Override
     public AuthResponse verifyOtp(String email, String otp) {
 
-        if (!otp.equals(otpStore.get(email)) ||
-                Instant.now().isAfter(otpExpiry.get(email))) {
+        if (!isOtpValid(email, otp)) {
             throw new InvalidOtpException("Invalid or expired OTP");
         }
 
@@ -78,6 +77,8 @@ public class AuthServiceImpl implements AuthService {
 
         user.setEmailVerified(true);
         userRepository.save(user);
+
+        clearOtp(email);
 
         var userDetails = org.springframework.security.core.userdetails.User
                 .withUsername(user.getEmail())
@@ -121,5 +122,25 @@ public class AuthServiceImpl implements AuthService {
                 user.getRole(),
                 jwtService.extractExpiration(token).toInstant()
         );
+    }
+
+    private void storeOtp(String email, String otp) {
+        otpStore.put(email, otp);
+        otpExpiry.put(email, Instant.now().plusSeconds(OTP_EXP));
+    }
+
+    private boolean isOtpValid(String email, String otp) {
+        if (email == null || email.isBlank() || otp == null || otp.isBlank()) return false;
+
+        String expected = otpStore.get(email);
+        Instant exp = otpExpiry.get(email);
+        if (expected == null || exp == null) return false;
+
+        return Objects.equals(expected, otp) && Instant.now().isBefore(exp);
+    }
+
+    private void clearOtp(String email) {
+        otpStore.remove(email);
+        otpExpiry.remove(email);
     }
 }

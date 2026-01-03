@@ -12,6 +12,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 
 @Component
 public class SendMailUtil {
@@ -21,7 +22,7 @@ public class SendMailUtil {
     @Autowired(required = false)
     private JavaMailSender mailSender;
 
-    @Value("${app.mail.type:smtp}")
+    @Value("${app.mail.type}")
     private String mailType;
 
     @Value("${app.mail.from}")
@@ -30,13 +31,31 @@ public class SendMailUtil {
     @Value("${app.mail.sendgrid-api-key:}")
     private String sendGridApiKey;
 
+    // Backward-compatible / alternate key
+    @Value("${sendgrid.api-key:}")
+    private String sendGridApiKeyAlt;
+
     private SendGrid sendGrid;
 
     @PostConstruct
     public void init() {
-        if ("sendgrid".equalsIgnoreCase(mailType)) {
-            sendGrid = new SendGrid(sendGridApiKey);
+        if (!StringUtils.hasText(fromAddress)) {
+            log.warn("app.mail.from is empty; outgoing mail may fail");
         }
+
+        // prefer app.mail.sendgrid-api-key, fallback to sendgrid.api-key
+        if (!StringUtils.hasText(sendGridApiKey) && StringUtils.hasText(sendGridApiKeyAlt)) {
+            sendGridApiKey = sendGridApiKeyAlt;
+        }
+
+        if ("sendgrid".equalsIgnoreCase(mailType)) {
+            if (!StringUtils.hasText(sendGridApiKey)) {
+                log.error("Mail type is sendgrid but no API key configured (app.mail.sendgrid-api-key / sendgrid.api-key)");
+            } else {
+                sendGrid = new SendGrid(sendGridApiKey);
+            }
+        }
+
         log.info("Mail initialized | type={} | from={}", mailType, fromAddress);
     }
 
@@ -74,6 +93,10 @@ public class SendMailUtil {
     }
 
     private boolean sendViaSendGrid(String to, String subject, String text) {
+        if (sendGrid == null) {
+            log.error("SendGrid not configured");
+            return false;
+        }
         try {
             Email from = new Email(fromAddress);
             Email toEmail = new Email(to);
