@@ -1,197 +1,125 @@
 package com.snapcloud.api.service.IMPL;
 
-import com.snapcloud.api.service.AuthService;
-import com.snapcloud.api.repository.UserRepository;
-import com.snapcloud.api.security.JwtService;
-import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.BadCredentialsException;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.AuthenticationException;
-import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-import com.snapcloud.api.dto.AuthRequest;
-import com.snapcloud.api.dto.AuthResponse;
 import com.snapcloud.api.domain.User;
 import com.snapcloud.api.domain.enums.Role;
+import com.snapcloud.api.dto.AuthRequest;
+import com.snapcloud.api.dto.AuthResponse;
+import com.snapcloud.api.exception.custom.*;
+import com.snapcloud.api.repository.UserRepository;
+import com.snapcloud.api.security.JwtService;
+import com.snapcloud.api.service.AuthService;
+import com.snapcloud.api.util.OtpUtils;
+import com.snapcloud.api.util.SendMailUtil;
+import lombok.RequiredArgsConstructor;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+
 import java.time.Instant;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import org.springframework.mail.SimpleMailMessage;
-import org.springframework.mail.javamail.JavaMailSender;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import com.snapcloud.api.exception.custom.ResourceAlreadyExistsException;
-import com.snapcloud.api.exception.custom.InvalidOtpException;
-import com.snapcloud.api.exception.custom.ResourceNotFoundException;
-import com.snapcloud.api.exception.custom.UnauthorizedException;
-import com.snapcloud.api.util.OtpUtils; // added util import
 
 @Service
 @RequiredArgsConstructor
-@Transactional
 public class AuthServiceImpl implements AuthService {
-    private static final Logger log = LoggerFactory.getLogger(AuthServiceImpl.class);
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final AuthenticationManager authenticationManager;
-    @Autowired(required = false)
-    private JavaMailSender mailSender; // mail sender (optional; configure spring.mail.* to enable)
+    private final SendMailUtil sendMailUtil;
 
-    private static final String USER_NOT_FOUND_MSG = "User not found with email: %s";
-    private static final String INVALID_CREDENTIALS_MSG = "Invalid email or password";
-    private static final String EMAIL_EXISTS_MSG = "Email already in use: %s";
-
-    // in-memory OTP store: email -> otp, and expiry map
-    private final Map<String, String> otpStorage = new ConcurrentHashMap<>();
+    private final Map<String, String> otpStore = new ConcurrentHashMap<>();
     private final Map<String, Instant> otpExpiry = new ConcurrentHashMap<>();
-    private static final long OTP_EXPIRATION_SECONDS = 10 * 60; // 10 minutes
+    private static final long OTP_EXP = 600;
 
-    // New: register sends OTP to provided email (creates user with emailVerified=false)
     @Override
     public AuthResponse register(AuthRequest request) {
-        String email = request.getEmail();
-        String rawPassword = request.getPassword();
 
-        // If already exists and verified -> 409 Conflict via custom exception
-        var existing = userRepository.findByEmail(email);
-        if (existing.isPresent() && Boolean.TRUE.equals(existing.get().isEmailVerified())) {
-            throw new ResourceAlreadyExistsException(String.format(EMAIL_EXISTS_MSG, email));
-        }
+        User user = userRepository.findByEmail(request.getEmail())
+                .orElseGet(() -> {
+                    User u = new User();
+                    u.setEmail(request.getEmail());
+                    u.setRole(Role.USER);
+                    u.setEmailVerified(false);
+                    return u;
+                });
 
-        User user;
-        if (existing.isPresent()) {
-            // update password if provided and keep emailVerified=false
-            user = existing.get();
-            if (rawPassword != null && !rawPassword.isBlank()) {
-                user.setPasswordHash(passwordEncoder.encode(rawPassword));
-            }
-        } else {
-            user = new User();
-            user.setEmail(email);
-            user.setPasswordHash(passwordEncoder.encode(rawPassword));
-            user.setRole(Role.USER);
-            user.setEmailVerified(false);
-        }
-        user = userRepository.save(user);
+        user.setPasswordHash(passwordEncoder.encode(request.getPassword()));
+        userRepository.save(user);
 
-        String otp = OtpUtils.generateOtp(); // use util
-        otpStorage.put(email, otp);
-        otpExpiry.put(email, Instant.now().plusSeconds(OTP_EXPIRATION_SECONDS));
+        String otp = OtpUtils.generateOtp();
+        otpStore.put(user.getEmail(), otp);
+        otpExpiry.put(user.getEmail(), Instant.now().plusSeconds(OTP_EXP));
 
-        boolean emailSent = sendOtpEmail(email, otp);
-
-        String message;
-        if (emailSent) {
-            message = "Verification code sent to email";
-        } else {
-            message = "Verification code generated but email sending is not configured. Contact support to receive the code.";
-        }
+        sendMailUtil.sendEmail(
+                user.getEmail(),
+                "SnapCloud Verification Code",
+                "Your OTP is: " + otp + "\nValid for 10 minutes."
+        );
 
         return AuthResponse.builder()
-                .accessToken(null)
-                .email(email)
-                .role(user.getRole())
-                .message(message)
+                .email(user.getEmail())
+                .message("OTP sent to email")
                 .build();
     }
 
     @Override
     public AuthResponse verifyOtp(String email, String otp) {
-        if (email == null || otp == null || email.isBlank() || otp.isBlank()) {
-            throw new InvalidOtpException("Email and otp are required");
-        }
-        String expected = otpStorage.get(email);
-        Instant expiry = otpExpiry.get(email);
-        if (expected == null || expiry == null || Instant.now().isAfter(expiry)) {
-            throw new InvalidOtpException("Otp expired or not found");
-        }
-        if (!expected.equals(otp)) {
-            throw new InvalidOtpException("Otp incorrect");
+
+        if (!otp.equals(otpStore.get(email)) ||
+                Instant.now().isAfter(otpExpiry.get(email))) {
+            throw new InvalidOtpException("Invalid or expired OTP");
         }
 
         User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new ResourceNotFoundException(String.format(USER_NOT_FOUND_MSG, email)));
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
         user.setEmailVerified(true);
         userRepository.save(user);
 
-        otpStorage.remove(email);
-        otpExpiry.remove(email);
-
-        // build userDetails and generate token
         var userDetails = org.springframework.security.core.userdetails.User
                 .withUsername(user.getEmail())
                 .password(user.getPasswordHash())
-                .authorities("ROLE_" + (user.getRole() != null ? user.getRole().name() : "USER"))
+                .authorities("ROLE_" + user.getRole().name())
                 .build();
 
-        var jwtToken = jwtService.generateToken(userDetails);
-        Instant expiration = jwtService.extractExpiration(jwtToken).toInstant();
+        String token = jwtService.generateToken(userDetails);
 
         return AuthResponse.success(
-                jwtToken,
+                token,
                 user.getEmail(),
                 user.getRole(),
-                expiration
+                jwtService.extractExpiration(token).toInstant()
         );
     }
 
-    // existing authenticate method
     @Override
     public AuthResponse authenticate(AuthRequest request) {
-        try {
-            authenticationManager.authenticate(
+        authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(
-                    request.getEmail(),
-                    request.getPassword()
+                        request.getEmail(),
+                        request.getPassword()
                 )
-            );
+        );
 
-            User user = userRepository.findByEmail(request.getEmail())
-                    .orElseThrow(() -> new UnauthorizedException(INVALID_CREDENTIALS_MSG));
+        User user = userRepository.findByEmail(request.getEmail())
+                .orElseThrow(() -> new UnauthorizedException("Invalid credentials"));
 
-            var userDetails = org.springframework.security.core.userdetails.User
-                    .withUsername(user.getEmail())
-                    .password(user.getPasswordHash())
-                    .authorities("ROLE_" + (user.getRole() != null ? user.getRole().name() : "USER"))
-                    .build();
+        var userDetails = org.springframework.security.core.userdetails.User
+                .withUsername(user.getEmail())
+                .password(user.getPasswordHash())
+                .authorities("ROLE_" + user.getRole().name())
+                .build();
 
-            var jwtToken = jwtService.generateToken(userDetails);
-            Instant expiration = jwtService.extractExpiration(jwtToken).toInstant();
+        String token = jwtService.generateToken(userDetails);
 
-            return AuthResponse.success(
-                    jwtToken,
-                    user.getEmail(),
-                    user.getRole(),
-                    expiration
-            );
-
-        } catch (BadCredentialsException ex) {
-            throw new UnauthorizedException(INVALID_CREDENTIALS_MSG);
-        } catch (AuthenticationException ex) {
-            throw new UnauthorizedException("Authentication failed: " + ex.getMessage());
-        }
-    }
-
-    private boolean sendOtpEmail(String to, String otp) {
-        if (mailSender == null) {
-            log.warn("Mail sender not configured; OTP for {} is {}", to, otp);
-            return false;
-        }
-        try {
-            SimpleMailMessage message = new SimpleMailMessage();
-            message.setTo(to);
-            message.setSubject("Your verification code");
-            message.setText("Your verification code is: " + otp + "\nThis code expires in 10 minutes.");
-            mailSender.send(message);
-            return true;
-        } catch (Exception e) {
-            log.error("Failed to send verification email to {}: {}", to, e.getMessage());
-            return false;
-        }
+        return AuthResponse.success(
+                token,
+                user.getEmail(),
+                user.getRole(),
+                jwtService.extractExpiration(token).toInstant()
+        );
     }
 }
