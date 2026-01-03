@@ -86,11 +86,9 @@ public class SendMailUtil {
             request.setBody(mail.build());
 
             Response response = sendGrid.api(request);
-            log.info("SendGrid status: {}", response.getStatusCode());
             System.out.println("SendGrid status: " + response.getStatusCode());
             return response.getStatusCode() >= 200 && response.getStatusCode() < 300;
         } catch (Exception e) {
-            log.error("SendGrid failed: {}", e.getMessage());
             return false;
         }
     }
