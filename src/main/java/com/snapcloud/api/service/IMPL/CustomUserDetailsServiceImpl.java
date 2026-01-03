@@ -1,4 +1,4 @@
-package com.snapcloud.api.service;
+package com.snapcloud.api.service.IMPL;
 
 import com.snapcloud.api.domain.User;
 import com.snapcloud.api.repository.UserRepository;
@@ -12,7 +12,7 @@ import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.stereotype.Service;
 
 @Service
-public class CustomUserDetailsService implements UserDetailsService {
+public class CustomUserDetailsServiceImpl implements UserDetailsService {
   @Autowired
   private UserRepository userRepository;
 

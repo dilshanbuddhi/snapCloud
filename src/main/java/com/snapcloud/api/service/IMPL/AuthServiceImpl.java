@@ -1,5 +1,6 @@
-package com.snapcloud.api.service;
+package com.snapcloud.api.service.IMPL;
 
+import com.snapcloud.api.service.AuthService;
 import com.snapcloud.api.repository.UserRepository;
 import com.snapcloud.api.security.JwtService;
 import lombok.RequiredArgsConstructor;
@@ -17,7 +18,6 @@ import com.snapcloud.api.domain.User;
 import com.snapcloud.api.domain.enums.Role;
 import java.time.Instant;
 import java.util.Map;
-import java.util.Random;
 import java.util.concurrent.ConcurrentHashMap;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
@@ -27,12 +27,13 @@ import com.snapcloud.api.exception.custom.ResourceAlreadyExistsException;
 import com.snapcloud.api.exception.custom.InvalidOtpException;
 import com.snapcloud.api.exception.custom.ResourceNotFoundException;
 import com.snapcloud.api.exception.custom.UnauthorizedException;
+import com.snapcloud.api.util.OtpUtils; // added util import
 
 @Service
 @RequiredArgsConstructor
 @Transactional
-public class AuthenticationService {
-    private static final Logger log = LoggerFactory.getLogger(AuthenticationService.class);
+public class AuthServiceImpl implements AuthService {
+    private static final Logger log = LoggerFactory.getLogger(AuthServiceImpl.class);
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
@@ -51,6 +52,7 @@ public class AuthenticationService {
     private static final long OTP_EXPIRATION_SECONDS = 10 * 60; // 10 minutes
 
     // New: register sends OTP to provided email (creates user with emailVerified=false)
+    @Override
     public AuthResponse register(AuthRequest request) {
         String email = request.getEmail();
         String rawPassword = request.getPassword();
@@ -77,7 +79,7 @@ public class AuthenticationService {
         }
         user = userRepository.save(user);
 
-        String otp = generateOtp();
+        String otp = OtpUtils.generateOtp(); // use util
         otpStorage.put(email, otp);
         otpExpiry.put(email, Instant.now().plusSeconds(OTP_EXPIRATION_SECONDS));
 
@@ -98,6 +100,7 @@ public class AuthenticationService {
                 .build();
     }
 
+    @Override
     public AuthResponse verifyOtp(String email, String otp) {
         if (email == null || otp == null || email.isBlank() || otp.isBlank()) {
             throw new InvalidOtpException("Email and otp are required");
@@ -138,6 +141,7 @@ public class AuthenticationService {
     }
 
     // existing authenticate method
+    @Override
     public AuthResponse authenticate(AuthRequest request) {
         try {
             authenticationManager.authenticate(
@@ -171,11 +175,6 @@ public class AuthenticationService {
         } catch (AuthenticationException ex) {
             throw new UnauthorizedException("Authentication failed: " + ex.getMessage());
         }
-    }
-
-    private String generateOtp() {
-        int number = new Random().nextInt(1_000_000);
-        return String.format("%06d", number);
     }
 
     private boolean sendOtpEmail(String to, String otp) {
