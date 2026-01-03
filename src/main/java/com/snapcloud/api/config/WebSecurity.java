@@ -17,9 +17,10 @@ public class WebSecurity {
         http.csrf(AbstractHttpConfigurer::disable)
 
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/auth/**").permitAll()
-                        .requestMatchers("/api/auth/verify").permitAll()
-                        .requestMatchers("/api/auth/verify").permitAll()
+                        .requestMatchers("/api/v1/auth/**").permitAll()
+                        .requestMatchers("/api/v1/auth/verify").permitAll()
+                        .requestMatchers("/api/v1/auth/verify").permitAll()
+                        .requestMatchers("/test-mail/**").permitAll()
                         .anyRequest().authenticated()
                 );
 
