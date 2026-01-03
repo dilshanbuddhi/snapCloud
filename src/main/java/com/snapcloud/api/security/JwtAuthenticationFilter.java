@@ -1,6 +1,6 @@
 package com.snapcloud.api.security;
 
-import com.snapcloud.api.service.IMPL.CustomUserDetailsServiceImpl;
+import com.snapcloud.api.service.CustomUserDetailsService;
 import java.io.IOException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -21,7 +21,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
   private JwtService jwtService;
 
   @Autowired
-  private CustomUserDetailsServiceImpl userDetailsService;
+  private CustomUserDetailsService userDetailsService;
 
   @Override
   protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,

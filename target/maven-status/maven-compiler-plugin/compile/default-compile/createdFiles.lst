@@ -1,0 +1,11 @@
+com\snapcloud\api\domain\Subscription.class
+com\snapcloud\api\domain\enums\PlanType.class
+com\snapcloud\api\domain\enums\PaymentStatus.class
+com\snapcloud\api\domain\User.class
+com\snapcloud\api\domain\Usage.class
+com\snapcloud\api\domain\ApiKey.class
+com\snapcloud\api\domain\Payment.class
+com\snapcloud\api\domain\enums\SubscriptionStatus.class
+com\snapcloud\api\domain\Plan.class
+com\snapcloud\api\SnapCloudApplication.class
+com\snapcloud\api\domain\Image.class
