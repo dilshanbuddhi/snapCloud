@@ -23,10 +23,10 @@ import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import com.snapcloud.api.exception.ResourceAlreadyExistsException;
-import com.snapcloud.api.exception.InvalidOtpException;
-import com.snapcloud.api.exception.ResourceNotFoundException;
-import com.snapcloud.api.exception.UnauthorizedException;
+import com.snapcloud.api.exception.custom.ResourceAlreadyExistsException;
+import com.snapcloud.api.exception.custom.InvalidOtpException;
+import com.snapcloud.api.exception.custom.ResourceNotFoundException;
+import com.snapcloud.api.exception.custom.UnauthorizedException;
 
 @Service
 @RequiredArgsConstructor

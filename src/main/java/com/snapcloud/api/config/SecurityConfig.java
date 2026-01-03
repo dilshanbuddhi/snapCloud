@@ -45,17 +45,4 @@ public class SecurityConfig {
     return authConfig.getAuthenticationManager();
   }
 
-  @Bean
-  public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
-    http
-        .csrf().disable()
-        .exceptionHandling().authenticationEntryPoint(entryPoint).and()
-        .authorizeHttpRequests()
-          .requestMatchers("/api/auth/**", "/actuator/**").permitAll()
-          .anyRequest().authenticated()
-        .and()
-        .authenticationProvider(authenticationProvider())
-        .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
-    return http.build();
-  }
 }
