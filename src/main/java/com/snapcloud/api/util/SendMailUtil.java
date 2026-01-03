@@ -61,7 +61,6 @@ public class SendMailUtil {
             }
         }
 
-        log.info("Mail initialized | type={} | from={}", mailType, fromAddress);
     }
 
     public boolean sendEmail(String to, String subject, String text) {
