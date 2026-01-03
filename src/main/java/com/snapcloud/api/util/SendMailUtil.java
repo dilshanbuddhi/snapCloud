@@ -22,7 +22,7 @@ public class SendMailUtil {
     @Autowired(required = false)
     private JavaMailSender mailSender;
 
-    @Value("${app.mail.type}")
+    @Value("${app.mail.type:smtp}")
     private String mailType;
 
     @Value("${app.mail.from}")
@@ -39,6 +39,10 @@ public class SendMailUtil {
 
     @PostConstruct
     public void init() {
+        if (!StringUtils.hasText(mailType)) {
+            mailType = "smtp";
+        }
+
         if (!StringUtils.hasText(fromAddress)) {
             log.warn("app.mail.from is empty; outgoing mail may fail");
         }
@@ -50,7 +54,8 @@ public class SendMailUtil {
 
         if ("sendgrid".equalsIgnoreCase(mailType)) {
             if (!StringUtils.hasText(sendGridApiKey)) {
-                log.error("Mail type is sendgrid but no API key configured (app.mail.sendgrid-api-key / sendgrid.api-key)");
+                log.error("Mail type is sendgrid but no API key configured; will fallback to SMTP");
+                sendGrid = null;
             } else {
                 sendGrid = new SendGrid(sendGridApiKey);
             }
@@ -61,6 +66,12 @@ public class SendMailUtil {
 
     public boolean sendEmail(String to, String subject, String text) {
         if ("sendgrid".equalsIgnoreCase(mailType)) {
+            // if key missing / not initialized, go straight to SMTP
+            if (sendGrid == null) {
+                log.warn("SendGrid not available → using SMTP");
+                return sendViaSmtp(to, subject, text);
+            }
+
             boolean sent = sendViaSendGrid(to, subject, text);
             if (!sent) {
                 log.warn("SendGrid failed → fallback to SMTP");
