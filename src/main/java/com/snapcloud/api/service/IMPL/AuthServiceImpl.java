@@ -56,7 +56,7 @@ public class AuthServiceImpl implements AuthService {
         sendMailUtil.sendEmail(
                 user.getEmail(),
                 "SnapCloud Verification Code",
-                "Your OTP is: " + otp + "\nValid for 10 minutes."
+                "Your SnapCloud OTP is: " + otp + "\nValid for 10 minutes."
         );
 
         return AuthResponse.builder()
